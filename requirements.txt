@@ -1,0 +1,8 @@
+pandas
+numpy
+seaborn matplotlib
+sklearn
+yellowbrick
+imblearn
+pickle
+warnings

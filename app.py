@@ -16,7 +16,6 @@ st.set_option('deprecation.showPyplotGlobalUse', False)
 
 model = pickle.load(open("rfc_model.pkl", "rb"))
 scaler = pickle.load(open("scaler.pkl", "rb"))
-label_encoder = pickle.load(open("label_encoder.pkl", "rb"))
 kmeans = pickle.load(open("kmeans.pkl", "rb"))
 
 # Sidebar
@@ -93,7 +92,7 @@ def main():
     elif st.checkbox("Employees From Dataset"):
         
         d = process()
-        select3 = st.selectbox("Please select a section:", ["", "Find Random Employees", "Find Top N Loyal Employees", "Find Top N Employees                                                             with High Churn Probability"])
+        select3 = st.selectbox("Please select a section:", ["", "Find Random Employees", "Find Top N Loyal Employees", "Find Top N Employees with High Churn Probability"])
         
         if select3 == "Find Random Employees":
             random = st.number_input("Please enter number:", min_value=1, step=1)
@@ -132,17 +131,19 @@ def sidebar_df(satisfaction, last_evaluation, number_project, monthly_hours, tim
         
     # Scaling and Label Encoding
 
-    arr = scaler.transform(df)
-    df2 = pd.DataFrame(arr, columns=df.columns)
-    salary_label = label_encoder.transform(np.array([salary.lower()]))[0]
-
-    # Cluster Labels
-        
-    df3 = df2.join(df_department)
-    df3["salary"] = salary_label
-    cluster = kmeans.predict(df3)[0]
-    df3["cluster_label"] = cluster
+    df2 = df.join(df_department)
+    if salary == "High": df2["salary"] = 3
+    elif salary == "Medium": df2["salary"] = 2
+    else: df2["salary"] = 1
     
+    # Clustering
+    
+    cluster = kmeans.predict(df2)[0]
+    df2["cluster_label"] = cluster
+    
+    arr = scaler.transform(df2)
+    df3 = pd.DataFrame(arr, columns=df2.columns)
+   
     return df3
 
 
@@ -154,17 +155,27 @@ def load_data():
 
 def process():
     
-    df = load_data().drop("left", axis=1)
+    df = pd.read_csv("HR_Dataset.csv").drop("left", axis=1)
+    df2 = df[df.columns[:-1]]
 
-    sc = scaler.transform(df[df.columns[:-2]])
-    df2 = pd.DataFrame(sc, columns=df.columns[:-2])
+    # Get dummies
     df2 = df2.join(pd.get_dummies(df["Departments "]))
-    df2["salary"] = label_encoder.transform(df["salary"])
-    label = kmeans.predict(df2)
-    df2["cluster_label"] = label
-    pred_proba = [i[1] for i in model.predict_proba(df2)]
-    df["prediction_proba"] = pred_proba
+    df2.drop("Departments ", axis=1, inplace=True)
+
+    # Label encoding
+    df2["salary"] = df["salary"].map({"high":3, "medium":2, "low":1})
     
+    # Clustering
+    kmeans = KMeans(n_clusters=5)
+    kmeans.fit(df2)
+    df2["cluster_label"] = kmeans.labels_
+
+    scale = StandardScaler()
+    sc = scale.fit_transform(df2)
+    df3 = pd.DataFrame(sc, columns=df2.columns)
+    pred_proba = [i[1] for i in model.predict_proba(df3)]
+    df["prediction_proba"] = pred_proba
+
     return df
 
 if __name__ == "__main__":
